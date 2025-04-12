@@ -1,83 +1,115 @@
-# Gemma 3 PDF Summarizer
+# 📄 AI-Powered PDF Summarizer
 
-A powerful PDF summarization tool that uses Google's Gemma 3 (via Ollama) to generate comprehensive technical summaries of academic papers, with a focus on extracting and organizing technical details.
+🚀 **AI-Powered PDF Summarizer** is a tool that extracts and summarizes **research papers** from **ArXiv PDFs** using **Ollama (Gemma 3 LLM)**. The system provides structured, downloadable summaries to help researchers and professionals quickly grasp key findings.
 
-![PDF Summarizer Architecture](PDF_Summarizer.png)
+![PDF Summarizer UI](https://github.com/arjunprabhulal/gemma3_pdf_summarizer/raw/main/PDF_Summarizer.png)
 
-## Features
+---
 
-- 📚 Arxiv PDF download and processing
-- 🔍 Intelligent text extraction and chunking
-- 🤖 Parallel processing with Gemma 3 LLM
-- 📊 Structured technical summaries
-- ⚡ FastAPI backend with async processing
-- 🌐 Streamlit frontend interface
+## 🛠 Features
 
-## System Requirements
+- 🌐 **Input an ArXiv PDF URL** to fetch and summarize papers.
+- 📑 **Extracts technical content** (architecture, implementation, results).
+- 🔍 **Optimized for large text processing** with **parallel summarization**.
+- 🎨 **Modern UI** built with **Streamlit**.
+- 📥 **Download summary as a Markdown file**.
 
-- Python 3.8+
-- Ollama with Gemma 3 model installed
-- 16GB+ RAM recommended
-- GPU recommended for faster processing
+---
 
-## Installation
+## 🚀 Tech Stack
 
-1. Clone the repository:
+| Component         | Technology |
+|------------------|------------|
+| **Frontend**     | [Streamlit](https://streamlit.io/) |
+| **Backend**      | [FastAPI](https://fastapi.tiangolo.com/) |
+| **LLM Platform** | [Ollama](https://ollama.com/) |
+| **LLM Model**    | [Google Gemma 3](https://developers.googleblog.com/en/introducing-gemma3/) |
+| **PDF Processing** | [PyMuPDF (fitz)](https://pymupdf.readthedocs.io/) |
+| **Text Chunking** | [LangChain RecursiveCharacterTextSplitter](https://python.langchain.com/docs/modules/data_connection/document_transformers/text_splitters/) |
+---
+
+## 🎬 Demo
+
+1️⃣ **Enter an ArXiv PDF URL**  
+2️⃣ **Click "Summarize PDF"** 🚀  
+3️⃣ **Get a structured summary** with **technical insights** 📝  
+4️⃣ **Download as Markdown** 📥  
+
+---
+
+## 🔧 Installation & Setup
+
+### 1️⃣ Clone the Repository
+
 ```bash
-git clone https://github.com/arjunprabhulal/gemma3_pdf_summarizer.git
+git clone https://github.com/arjunprahulal/gemma3_pdf_summarizer.git
 cd gemma3_pdf_summarizer
+
 ```
 
-2. Install dependencies:
+### 2️⃣ Install Dependencies
+
 ```bash
-pip install -r requirement.txt
+pip install -r requirements.txt
 ```
 
-3. Install and run Ollama with Gemma 3:
+### 3️⃣ Install Ollama and Gemma 3 LLM
+
+
+Install Ollama - MacOS/Linux
+
 ```bash
-# Install Ollama from https://ollama.ai
+curl -fsSL https://ollama.com/install.sh | sh
+
+```
+
+Download Gemma 3 Model
+
+```bash
 ollama pull gemma3:27b
 ```
 
-## Usage
+### 3️⃣ Start the Backend (FastAPI)
 
-1. Start the FastAPI backend:
 ```bash
-python main.py
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-2. Start the Streamlit frontend in a new terminal:
+### 4️⃣ Start the Frontend (Streamlit)
+
 ```bash
 streamlit run frontend.py
 ```
 
-3. Access the web interface at `http://localhost:8501`
+---
 
-## Architecture
+## 📜 API Endpoints
 
-The system uses a parallel processing architecture to handle large PDFs efficiently:
+### 🔹 Health Check
 
-1. **PDF Processing**: Downloads and extracts text from PDFs using PyMuPDF
-2. **Text Chunking**: Splits text into optimal chunks for Gemma 3's context window
-3. **Parallel Processing**: Processes chunks concurrently with retry mechanisms
-4. **Summary Generation**: Creates structured technical summaries focusing on:
-   - System Architecture
-   - Technical Implementation
-   - Infrastructure & Setup
-   - Performance Analysis
-   - Optimization Techniques
+```http
+GET /health
+```
 
-## API Endpoints
+Response:
+```json
+{"status": "ok", "message": "FastAPI backend is running!"}
+```
 
-- `GET /health`: Health check endpoint
-- `POST /summarize_arxiv/`: Main endpoint for PDF summarization
-  - Input: `{"url": "https://arxiv.org/pdf/paper_id.pdf"}`
-  - Output: Structured technical summary
-
-## Contributing
-
-Feel free to open issues or submit pull requests for improvements.
-
-## License
-
-MIT License
+### 🔹 Summarize
+Summarize an ArXiv Paper
+```
+POST /summarize_arxiv/
+```
+Request Body:
+```
+{
+  "url": "https://arxiv.org/pdf/2401.02385.pdf"
+}
+```
+Response:
+```
+{
+  "summary": "Structured summary of the research paper..."
+}
+```
