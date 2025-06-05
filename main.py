@@ -6,7 +6,7 @@ import asyncio
 import json
 import httpx
 from concurrent.futures import ThreadPoolExecutor
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import ollama
@@ -21,6 +21,16 @@ app = FastAPI()
 
 class URLRequest(BaseModel):
     url: str
+
+
+class FileRequest(BaseModel):
+    file_path: str
+
+
+class PDFRequest(BaseModel):
+    """Unified model that can handle both URLs and local file paths"""
+    source: str  # Can be URL or local file path
+    source_type: str = "auto"  # "url", "file", or "auto" for automatic detection
 
 
 @app.get("/health")
@@ -64,10 +74,10 @@ async def summarize_arxiv(request: URLRequest):
 def download_pdf(url):
     """Downloads a PDF from a given URL and saves it locally."""
     try:
-        if not url.startswith("https://arxiv.org/pdf/"):
+        '''if not url.startswith("https://arxiv.org/pdf/"):
             logger.error(f"Invalid URL: {url}")
             return None  # Prevents downloading non-Arxiv PDFs
-
+        '''
         response = requests.get(url, timeout=30)  # Set timeout to prevent long waits
         if response.status_code == 200 and "application/pdf" in response.headers.get("Content-Type", ""):
             pdf_filename = "arxiv_paper.pdf"
@@ -91,6 +101,36 @@ def extract_text_from_pdf(pdf_path):
     except Exception as e:
         logger.error(f"Error extracting text: {e}")
         return ""
+
+def detect_source_type(source):
+    """Detects whether the source is a URL or local file path."""
+    if source.startswith(("http://", "https://")):
+        return "url"
+    elif os.path.exists(source) and source.lower().endswith('.pdf'):
+        return "file"
+    else:
+        # Check if it's a windows path pattern
+        if os.path.sep in source or source[1:3] == ":\\":
+            return "file"
+        return "url"
+
+def process_local_pdf(file_path):
+    """Processes a local PDF file."""
+    try:
+        if not os.path.exists(file_path):
+            logger.error(f"File not found: {file_path}")
+            return None
+        
+        if not file_path.lower().endswith('.pdf'):
+            logger.error(f"File is not a PDF: {file_path}")
+            return None
+        
+        logger.info(f"Processing local PDF: {file_path}")
+        return file_path
+        
+    except Exception as e:
+        logger.error(f"Error processing local PDF: {e}")
+        return None
 
 async def summarize_chunk_with_retry(chunk, chunk_id, total_chunks, max_retries=2):
     """Retry mechanism wrapper for summarize_chunk_wrapper."""
@@ -242,7 +282,7 @@ async def summarize_text_parallel(text):
         try:
             # Use async http client for the final summary as well
             payload = {
-                "model": "gemma3:27b",
+                "model": "gemma3:12b",
                 "messages": final_messages,
                 "stream": False
             }
@@ -297,7 +337,7 @@ async def summarize_chunk_wrapper(chunk, chunk_id, total_chunks):
         
         # Use httpx for truly parallel API calls
         payload = {
-            "model": "gemma3:27b",
+            "model": "gemma3:12b",
             "messages": messages,
             "stream": False
         }
@@ -373,7 +413,7 @@ def summarize_chunk(chunk, chunk_id):
     """
     try:
         logger.info(f"🤖 Sending chunk {chunk_id} to Ollama...")
-        response = ollama.chat(model="gemma3:27b", messages=[{"role": "user", "content": prompt}])
+        response = ollama.chat(model="gemma3:12b", messages=[{"role": "user", "content": prompt}])
         summary = response['message']['content']
         logger.info(f"✅ Successfully processed chunk {chunk_id}")
         logger.info(f"📊 Summary length: {len(summary)} characters")
@@ -382,6 +422,108 @@ def summarize_chunk(chunk, chunk_id):
     except Exception as e:
         logger.error(f"❌ Error summarizing chunk {chunk_id}: {e}")
         return f"Error summarizing chunk {chunk_id}"
+
+
+@app.post("/summarize_local/")
+async def summarize_local(request: FileRequest):
+    """Processes a local PDF file and summarizes it using Ollama (Gemma 3) in parallel."""
+    try:
+        file_path = request.file_path
+        logger.info("---------------------------------------------------------")
+        logger.info(f"Processing local PDF: {file_path}")
+
+        pdf_path = process_local_pdf(file_path)
+        if not pdf_path:
+            raise HTTPException(status_code=400, detail="Failed to process local PDF file")
+
+        logger.info(f"Extracting text from PDF...")
+        text = extract_text_from_pdf(pdf_path)
+        if not text:
+            raise HTTPException(status_code=400, detail="Failed to extract text from PDF")
+        
+        logger.info(f"Splitting text into chunks...")
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=20000, chunk_overlap=1000)
+        chunks = text_splitter.split_text(text)
+        logger.info(f"Created {len(chunks)} chunks")
+
+        logger.info(f"Starting parallel summarization with Ollama...")
+        final_summary = await summarize_text_parallel(text)
+
+        if not final_summary:
+            raise HTTPException(status_code=500, detail="Failed to generate summary")
+
+        logger.info("PDF processing completed successfully!")
+        logger.info("---------------------------------------------------------")
+
+        return {
+            "source": file_path,
+            "source_type": "local_file",
+            "final_summary": final_summary
+        }
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error processing local PDF: {e}")
+        raise HTTPException(status_code=500, detail="Failed to process PDF")
+
+
+@app.post("/summarize/")
+async def summarize_pdf(request: PDFRequest):
+    """Unified endpoint that can handle both URLs and local file paths."""
+    try:
+        source = request.source
+        source_type = request.source_type
+        
+        # Auto-detect source type if not specified
+        if source_type == "auto":
+            source_type = detect_source_type(source)
+        
+        logger.info("---------------------------------------------------------")
+        logger.info(f"Processing PDF from {source_type}: {source}")
+        
+        # Process based on source type
+        if source_type == "url":
+            pdf_path = download_pdf(source)
+            if not pdf_path:
+                raise HTTPException(status_code=400, detail="Failed to download PDF from URL")
+        elif source_type == "file":
+            pdf_path = process_local_pdf(source)
+            if not pdf_path:
+                raise HTTPException(status_code=400, detail="Failed to process local PDF file")
+        else:
+            raise HTTPException(status_code=400, detail="Invalid source type. Must be 'url' or 'file'")
+
+        logger.info(f"Extracting text from PDF...")
+        text = extract_text_from_pdf(pdf_path)
+        if not text:
+            raise HTTPException(status_code=400, detail="Failed to extract text from PDF")
+        
+        logger.info(f"Splitting text into chunks...")
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=20000, chunk_overlap=1000)
+        chunks = text_splitter.split_text(text)
+        logger.info(f"Created {len(chunks)} chunks")
+
+        logger.info(f"Starting parallel summarization with Ollama...")
+        final_summary = await summarize_text_parallel(text)
+
+        if not final_summary:
+            raise HTTPException(status_code=500, detail="Failed to generate summary")
+
+        logger.info("PDF processing completed successfully!")
+        logger.info("---------------------------------------------------------")
+
+        return {
+            "source": source,
+            "source_type": source_type,
+            "final_summary": final_summary
+        }
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Error processing PDF: {e}")
+        raise HTTPException(status_code=500, detail="Failed to process PDF")
 
 
 if __name__ == "__main__":

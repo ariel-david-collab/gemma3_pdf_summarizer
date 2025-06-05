@@ -1,6 +1,6 @@
 # 📄 AI-Powered PDF Summarizer
 
-🚀 **AI-Powered PDF Summarizer** is a tool that extracts and summarizes **research papers** from **ArXiv PDFs** using **Ollama (Gemma 3 LLM)**. The system provides structured, downloadable summaries to help researchers and professionals quickly grasp key findings.
+🚀 **AI-Powered PDF Summarizer** is a tool that extracts and summarizes **research papers** from **ArXiv PDFs** and **local PDF files** using **Ollama (Gemma 3 LLM)**. The system provides structured, downloadable summaries to help researchers and professionals quickly grasp key findings.
 
 ![PDF Summarizer UI](https://github.com/arjunprabhulal/gemma3_pdf_summarizer/raw/main/PDF_Summarizer.png)
 
@@ -9,10 +9,13 @@
 ## 🛠 Features
 
 - 🌐 **Input an ArXiv PDF URL** to fetch and summarize papers.
+- 📁 **Process local PDF files** directly from your computer.
+- 🔍 **Auto-detection** of URL vs local file path.
 - 📑 **Extracts technical content** (architecture, implementation, results).
 - 🔍 **Optimized for large text processing** with **parallel summarization**.
 - 🎨 **Modern UI** built with **Streamlit**.
 - 📥 **Download summary as a Markdown file**.
+- 🚀 **FastAPI backend** with multiple endpoints.
 
 ---
 
@@ -66,7 +69,7 @@ curl -fsSL https://ollama.com/install.sh | sh
 Download Gemma 3 Model
 
 ```bash
-ollama pull gemma3:27b
+ollama pull gemma3:12b
 ```
 
 ### 3️⃣ Start the Backend (FastAPI)
@@ -111,5 +114,22 @@ Response:
 ```
 {
   "summary": "Structured summary of the research paper..."
+}
+```
+
+### 📁 Local file endpoint:
+```
+POST /summarize_local/
+{
+    "file_path": "C:\\Users\\Usuario\\Documents\\paper.pdf"
+}
+```
+
+### 🔄 Unified endpoint (auto-detection):
+```
+POST /summarize/
+{
+    "source": "https://arxiv.org/pdf/2301.00001.pdf",
+    "source_type": "auto"
 }
 ```
